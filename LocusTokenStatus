@@ -1,0 +1,85 @@
+<apex:page standardController="Monitor_Diagnostics__c" sidebar="false" showHeader="false">
+
+<apex:includeScript value="/soap/ajax/28.0/connection.js"/>
+<apex:includeScript value="/soap/ajax/28.0/apex.js"/>
+
+<script>
+var APIRequestDate = new Date({!$Setup.LocusMonitorAPI__c.issued_at__c});
+var APIExpiresDate = new Date({!$Setup.LocusMonitorAPI__c.issued_at__c}+({!$Setup.LocusMonitorAPI__c.expires_in__c}*1000));
+var now = new Date();
+
+window.onload=function()
+      {
+         if(APIExpiresDate < now){
+         
+         document.getElementById('{!$Component.expirationPanel}').innerHTML = "Token is expired,refreshing";
+
+           sforce.connection.sessionId = "{!$Api.Session_ID}";
+           
+           sforce.connection.remoteFunction({
+               url: "https://api.locusenergy.com/oauth/token",
+               requestHeaders: {
+                   "Content-Type": "application/x-www-form-urlencoded"
+               },
+               requestData: "grant_type=client_credentials&client_id=YOUR_CLIENT_ID&client_secret=YOUR_SECRET",
+               method: "POST",
+               cache : false,
+               onSuccess: function (parsed_json) {
+                       var new_token = parsed_json.substring(19,47);
+                       var new_timestamp = parsed_json.substring(65,78);
+                       //alert(new_timestamp);
+                       
+                       var updateLocusAPI = new sforce.SObject("LocusMonitorAPI__c"); 
+                       updateLocusAPI.Id = 'ID_OF_CUSTOM_SETTING'; 
+                       updateLocusAPI.access_token__c = new_token; 
+                       updateLocusAPI.issued_at__c = new_timestamp;
+                       
+                       updateSetting = sforce.connection.update([updateLocusAPI]); 
+                       if (updateSetting[0].getBoolean("success")) { 
+                       parent.location.href="/{!Monitor_Diagnostics__c.Id}"
+                       //alert("Timestamp updated");
+                       }
+                       else { 
+                       alert("Could not update alert fields."); 
+                       } 
+               },
+               onFailure: function () {
+                   alert("Failed to get new token.");
+               }
+           });
+         }
+   
+var count=Math.round((APIExpiresDate - now)/1000);
+var counter=setInterval(timer, 1000);
+     
+function timer()
+{
+  count=count-1;
+  if (count <= 0)
+  {
+     clearInterval(counter);
+     parent.location.href="/{!Monitor_Diagnostics__c.Id}"
+     return;
+  }
+
+ document.getElementById('{!$Component.timer}').innerHTML=count + " secs until token expires";
+}
+      };
+</script>  
+
+<apex:outputPanel id="access_token" layout="block">Current access token: {!$Setup.LocusMonitorAPI__c.access_token__c}
+</apex:outputPanel>
+
+<apex:outputPanel id="expires_in" layout="block">Current expires in: {!$Setup.LocusMonitorAPI__c.expires_in__c}
+</apex:outputPanel>
+
+<apex:outputPanel id="issued_at" layout="block">Current issued at: {!$Setup.LocusMonitorAPI__c.issued_at__c}
+</apex:outputPanel>
+
+<apex:outputPanel id="expirationPanel" layout="block">
+</apex:outputPanel>
+
+<apex:outputPanel id="timer" layout="block">
+</apex:outputPanel>
+
+</apex:page>
